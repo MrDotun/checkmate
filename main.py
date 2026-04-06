@@ -32,15 +32,31 @@ def xy_to_square(px, py):
 
 def load_pieces(folder="pieces-png", size=SQ - 8):
     pieces = {}
-    # Basic mapping for web compatibility
-    for ptype in [1,2,3,4,5,6]:
+    # Explicit mapping to match your specific filenames (all lowercase)
+    piece_map = {
+        1: "pawn",
+        2: "knight",
+        3: "bishop",
+        4: "rook",
+        5: "queen",
+        6: "king"
+    }
+    
+    for ptype, p_name in piece_map.items():
         for color in [True, False]:
             c_name = "white" if color else "black"
-            p_name = chess.piece_name(ptype)
-            path = os.path.join(folder, f"{c_name}-{p_name}.png")
-            if os.path.exists(path):
-                img = pygame.image.load(path).convert_alpha()
-                pieces[(ptype, color)] = pygame.transform.smoothscale(img, (size, size))
+            filename = f"{c_name}-{p_name}.png"
+            path = os.path.join(folder, filename)
+            
+            try:
+                if os.path.exists(path):
+                    img = pygame.image.load(path).convert_alpha()
+                    pieces[(ptype, color)] = pygame.transform.smoothscale(img, (size, size))
+                else:
+                    # Fallback for filenames like white-pawn.png vs white-bpawn.png
+                    print(f"Skipping missing piece: {path}")
+            except Exception as e:
+                print(f"Error loading {path}: {e}")
     return pieces
 
 # ---------------- Draw Routines ----------------
@@ -63,7 +79,8 @@ async def main():
     
     pieces = load_pieces()
     board = chess.Board()
-    bot = ChessAI(engine_path=None) # Heuristic mode for web safety
+    # Using internal heuristic AI for faster web loading
+    bot = ChessAI(engine_path=None) 
     
     selected = None
     running = True
@@ -81,21 +98,26 @@ async def main():
                     if selected is None and pc and pc.color == board.turn:
                         selected = sq
                     elif selected is not None:
-                        move = chess.Move(selected, sq)
-                        if move in board.legal_moves:
-                            board.push(move)
-                        selected = None
+                        # Reselect if clicking another of your own pieces
+                        new_pc = board.piece_at(sq)
+                        if new_pc and new_pc.color == board.turn:
+                            selected = sq
+                        else:
+                            move = chess.Move(selected, sq)
+                            if move in board.legal_moves:
+                                board.push(move)
+                            selected = None
 
-        # Bot Move
+        # Bot Move (Black)
         if not board.is_game_over() and board.turn == chess.BLACK:
-            await asyncio.sleep(0.5) # Give the user a moment to see their move
+            await asyncio.sleep(0.5) 
             move = bot.choose_move(board)
             board.push(move)
 
         draw_board(screen, board, None, selected, pieces)
         pygame.display.flip()
         
-        # This line is CRITICAL for web support
+        # Keep browser responsive
         await asyncio.sleep(0) 
         clock.tick(60)
 
